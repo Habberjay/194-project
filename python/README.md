@@ -40,6 +40,8 @@ By default this uses the first supported video in `input_videos/`, saves PNG fra
 .\.venv\Scripts\python.exe scripts\extract_frames.py --video input_videos\site_walkthrough.mp4 --sample-fps 5 --max-frames 60 --clear
 ```
 
+Use `--sample-fps 1` for fewer frames or `--sample-fps 10` for a smoother but slower sequence. `--frame-step` is still available as a manual override.
+
 3. Generate grayscale depth maps:
 
 ```powershell
@@ -118,6 +120,12 @@ If your editor says the video is binary or uses unsupported text encoding, open 
 
 Per-frame overlays are written to `overlays/sequence/`. The MP4 demo is written to `output_videos/terrain_overlay_demo.mp4`.
 
+The contact sheet is written to:
+
+```text
+overlays/contact_sheet.png
+```
+
 7. Optional: normalize existing depth images again:
 
 ```powershell
@@ -133,10 +141,20 @@ Per-frame overlays are written to `overlays/sequence/`. The MP4 demo is written 
 ## Notes
 
 - Keep videos short for the first prototype.
-- Use `--frame-step` and `--max-frames` to reduce processing time on low-end devices.
+- Use `--sample-fps` and `--max-frames` to control how many frames are processed. Use `--frame-step` only when you want manual video-frame skipping.
 - Depth maps are relative depth, not metric measurements.
 - The current terrain overlay is a 2D proof-of-concept warp, not full 3D AR projection.
 - The `--track-points` option is video persistence, not true AR world anchoring. It uses optical flow to move the selected line through adjacent frames.
 - The `--temporal-memory` option smooths the terrain bend across frames. Try `0.5` for lighter smoothing or `0.8` for stronger smoothing.
 - Unity is not needed for the current line-selection and overlay prototype. Keep Unity for later AR or 3D terrain visualization experiments.
+- The next overlay upgrade should behave more like a string over terrain: many tracked control points, local depth snapping, and smoothing across frames.
 - If Unity terrain appears inverted, toggle `Invert Depth` in the Unity script.
+
+## Current Script Roles
+
+- `extract_frames.py`: extracts frames from a video, currently targeting about 5 frames per second by default.
+- `run_depth.py`: generates Depth Anything V2 grayscale depth maps.
+- `line_selector.py`: lets you click and save a reusable line preset.
+- `overlay_renderer.py`: renders one frame with flat versus terrain-aware overlay comparison.
+- `process_video.py`: renders multi-frame overlays with optional tracking and temporal memory.
+- `make_contact_sheet.py`: creates a PNG preview sheet from overlay frames.

@@ -1,8 +1,26 @@
 # Unity Setup
 
-Use Unity 2022 LTS with the built-in 3D project template. Do not use URP or HDRP for this prototype.
+Unity is optional for the current prototype.
 
-## Create the Project
+The active research prototype is the Python/OpenCV pipeline:
+
+```text
+video -> frames -> depth maps -> clicked line preset -> terrain-aware overlay -> demo video/contact sheet
+```
+
+Use Unity later if you want to experiment with 3D mesh visualization, mobile AR, or Unity AR Foundation. You do not need Unity to select a line, generate the bending overlay, process multiple frames, or create the current demo video.
+
+## Current Unity Purpose
+
+The Unity folder currently supports a separate depth-map-to-mesh experiment:
+
+```text
+Depth map PNG -> generated mesh -> blueprint texture on mesh
+```
+
+This can help visualize depth maps as terrain-like geometry, but it is not the main overlay workflow.
+
+## Create The Project
 
 1. Open Unity Hub.
 2. Create a new `3D Core` project using Unity 2022 LTS.
@@ -15,17 +33,25 @@ Use this layout inside the Unity project:
 
 ```text
 Assets/
-├── Materials/
-├── Scripts/
-│   └── DepthMapTerrainGenerator.cs
-└── Textures/
-    ├── Blueprints/
-    └── DepthMaps/
++-- Materials/
++-- Scripts/
+|   +-- DepthMapTerrainGenerator.cs
++-- Textures/
+    +-- Blueprints/
+    +-- DepthMaps/
 ```
 
-Import one grayscale depth PNG from `python/depth_maps/` into `Assets/Textures/DepthMaps/`.
+Import one grayscale depth PNG from `python/depth_maps/` into:
 
-Import your blueprint image into `Assets/Textures/Blueprints/`.
+```text
+Assets/Textures/DepthMaps/
+```
+
+Import your blueprint image into:
+
+```text
+Assets/Textures/Blueprints/
+```
 
 Recommended depth map import settings:
 
@@ -39,7 +65,7 @@ Recommended blueprint texture settings:
 - Texture Type: `Default`
 - Wrap Mode: `Repeat`
 
-## Create the Scene
+## Create The Scene
 
 1. Create an empty GameObject named `BlueprintTerrain`.
 2. Add the `DepthMapTerrainGenerator` component.
@@ -64,3 +90,14 @@ If no material is assigned, the script creates a simple unlit material automatic
 3. Set `Texture Tiling` to `(1, 1)`.
 4. Rotate the Scene view and confirm the mesh deforms.
 5. Adjust height scale until the blueprint visibly conforms to the terrain.
+
+## Future Unity Direction
+
+Unity becomes important later if the project moves from offline video processing to AR:
+
+- Unity AR Foundation can provide ARCore/ARKit camera tracking.
+- AR anchors can help keep overlays stable in world space.
+- A generated terrain mesh can be rendered in 3D instead of only drawing on video frames.
+- Blueprint lines can become world-space geometry projected onto terrain.
+
+For now, keep the Python results as the main research demo and use Unity only as an optional visualization experiment.

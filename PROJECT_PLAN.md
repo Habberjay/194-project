@@ -98,6 +98,7 @@ The current repository already separates the Python prototype and future Unity w
 ```txt
 project-root/
   PROJECT_PLAN.md
+  COMMAND_GUIDE.md
   README.md
 
   python/
@@ -105,6 +106,7 @@ project-root/
     requirements.txt
     setup_venv.ps1
     setup_venv.bat
+    line_presets.json
 
     input_videos/
       example_site_video.mp4
@@ -118,9 +120,13 @@ project-root/
     overlays/
       video_frame_00000_overlay.png
       video_frame_00000_comparison.png
+      contact_sheet.png
+      sequence/
+        video_frame_00000_overlay.png
 
     output_videos/
       terrain_overlay_demo.mp4
+      terrain_overlay_demo_small.avi
 
     checkpoints/
       depth_anything_v2_vits.pth
@@ -132,9 +138,12 @@ project-root/
       extract_frames.py
       run_depth.py
       normalize_depth.py
+      line_presets.py
+      line_selector.py
       terrain_line.py
       overlay_renderer.py
       process_video.py
+      make_contact_sheet.py
 
   unity/
     README.md
@@ -148,11 +157,16 @@ project-root/
     experiment_log.md
 ```
 
-Recommended new Python scripts:
+Current important Python scripts:
 
-- `terrain_line.py`: generates terrain-aware polylines from frame points and depth maps.
-- `overlay_renderer.py`: draws straight-line and conforming-line overlays for comparison.
-- `process_video.py`: runs the full offline pipeline for selected frames or a whole video.
+- `extract_frames.py`: extracts frames from the source video. The current default target is about 5 frames per second.
+- `run_depth.py`: runs Depth Anything V2 and saves grayscale depth maps.
+- `line_selector.py`: lets the user click point A and point B on a frame and save them as a line preset.
+- `line_presets.py`: reads and writes reusable line presets.
+- `terrain_line.py`: generates depth-aware polylines from frame points and depth maps.
+- `overlay_renderer.py`: draws flat-line and terrain-aware-line overlays for one frame.
+- `process_video.py`: renders overlays across multiple frames, with optional optical-flow tracking and temporal bend memory.
+- `make_contact_sheet.py`: creates a single PNG preview sheet from overlay frames.
 
 ## 6. Prototype Algorithm
 
@@ -259,40 +273,44 @@ Longer-term improvements may include:
 
 ## 11. Current Recommended Next Step
 
-The next implementation step is to add the terrain overlay stage to the existing Python pipeline:
+The current working pipeline is:
 
 ```txt
-video -> frames -> depth maps -> terrain-aware line -> overlay images/video
+video -> frames -> depth maps -> clicked line preset -> bending overlay -> persistent video demo
 ```
 
-The first useful target is a single-frame demo:
+The next research step is to improve the overlay logic from a two-endpoint bending line into a string-like surface-conforming line. The current result is useful for showing the idea, but it is still visually constrained by point A and point B. It cannot yet fully behave like a physical string laid over an object or terrain surface from changing viewpoints.
 
-1. Pick one extracted frame with visible uneven terrain.
-2. Pick two image points manually or hardcode them.
-3. Load the matching depth map.
-4. Generate a depth-influenced polyline.
-5. Export a comparison image with the straight line and conforming line.
+Next implementation target:
 
-Once that single-frame result is understandable, the project can expand to multiple frames and eventually to AR camera tracking.
+1. Convert the selected A/B line into many control points.
+2. Track those control points across frames, not only the two endpoints.
+3. Use local depth neighborhoods to adjust each control point toward visible surface shape.
+4. Smooth the control points so the line behaves like a continuous string.
+5. Export debug images showing control points, depth samples, and final overlay.
 
 ## 12. Current Prototype Status
 
 The Python prototype now includes the terrain overlay stage:
 
 ```txt
-video -> frames -> depth maps -> terrain-aware overlay images -> optional demo video
+video -> frames -> depth maps -> line preset -> terrain-aware overlay images -> optional demo video/contact sheet
 ```
 
 Implemented scripts:
 
+- `scripts/extract_frames.py`: extracts video frames. By default, it now samples about 5 frames per second unless `--frame-step` is manually provided.
 - `scripts/terrain_line.py`: samples depth along a user-defined line and converts it into a depth-aware polyline.
 - `scripts/line_selector.py`: lets the user click two points on a frame and save them as a reusable line preset.
 - `scripts/overlay_renderer.py`: renders a single-frame comparison with the original frame, depth map, flat line, and terrain-aware line.
 - `scripts/process_video.py`: applies the overlay renderer to multiple extracted frames, optionally tracks the selected line through the sequence, smooths the line bend with temporal memory, and writes an MP4 demo.
+- `scripts/make_contact_sheet.py`: creates a PNG preview sheet from the generated overlay frames.
 
 Main commands from the `python/` folder:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts\extract_frames.py --sample-fps 5 --max-frames 60 --clear
+.\.venv\Scripts\python.exe scripts\run_depth.py --clear
 .\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1
 .\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --preset site_line_1 --clear
 .\.venv\Scripts\python.exe -B scripts\process_video.py --preset site_line_1 --track-points --temporal-memory 0.65 --clear
@@ -303,6 +321,8 @@ Current outputs:
 - Single-frame overlay images are written to `python/overlays/`.
 - Multi-frame overlay sequences are written to `python/overlays/sequence/`.
 - The demo video is written to `python/output_videos/terrain_overlay_demo.mp4`.
+- A more compatible fallback video can be written to `python/output_videos/terrain_overlay_demo_small.avi` using `--fourcc MJPG --video-scale 0.5`.
+- A normal image preview can be written to `python/overlays/contact_sheet.png`.
 
 Unity is not required for the current prototype. The present research milestone can be completed in Python using OpenCV outputs. Unity should be treated as a later implementation path for real-time AR, mobile visualization, or 3D terrain mesh experiments.
 
@@ -327,6 +347,16 @@ Recommended short-term upgrade:
 - At each frame, resample the depth map around each control point.
 - Move each control point toward nearby depth ridges, slopes, or terrain changes.
 - Smooth the control points so the line behaves like a continuous string instead of a noisy curve.
+- Add a debug output that shows raw control points, depth-adjusted control points, and the final smoothed string.
+- Keep the clicked A/B line as the user input, but treat it as an initial guide rather than a rigid final constraint.
+
+Possible short-term algorithm:
+
+1. Generate `N` control points along the clicked line.
+2. For each control point, search a small vertical or normal-direction window in the depth map.
+3. Prefer positions that are locally consistent with neighboring control points and have strong depth/surface support.
+4. Apply a simple string constraint so adjacent points do not move too far apart.
+5. Blend the new control-point positions with the previous frame's positions for temporal stability.
 
 Recommended long-term upgrade:
 
@@ -337,3 +367,15 @@ Recommended long-term upgrade:
 - Reproject that 3D surface-following path into each video frame or AR camera view.
 
 The long-term version is the one that would show viewpoint changes correctly. It requires camera pose estimation and a persistent surface map. Possible tools include COLMAP, ORB-SLAM, ARCore, ARKit, or Unity AR Foundation later. For the current Python prototype, the best next step is dense control-point tracking plus depth-aware snapping.
+
+## 14. Documentation Status
+
+The current documentation set is:
+
+- `README.md`: quick project overview and shortest run sequence.
+- `COMMAND_GUIDE.md`: command-by-command usage guide with parameters and troubleshooting.
+- `python/README.md`: practical Python workflow.
+- `unity/README.md`: optional Unity mesh experiment notes.
+- `PROJECT_PLAN.md`: research context, current status, limitations, and future direction.
+
+When new scripts or parameters are added, update `COMMAND_GUIDE.md` first, then mirror the shortest version into `README.md` and `python/README.md`. Keep `PROJECT_PLAN.md` focused on research direction and implementation milestones rather than every command detail.

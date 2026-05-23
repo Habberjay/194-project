@@ -434,6 +434,7 @@ This prototype is:
 - A video-based proof of concept.
 - A way to show flat blueprint lines versus depth-aware terrain-conforming lines.
 - A way to test line selection, depth-based bending, and simple frame-to-frame persistence.
+- A practical Python/OpenCV workflow for inspecting results before building real AR.
 
 This prototype is not yet:
 
@@ -441,5 +442,26 @@ This prototype is not yet:
 - True world-anchored mapping.
 - Metric construction-grade layout.
 - Full 3D projection using camera intrinsics.
+- A true physical string simulation over a reconstructed surface.
 
 The current persistence is video persistence. It remembers line position and bend behavior across adjacent frames, but it is not yet a full AR spatial map.
+
+## 12. Current Limitation And Next Direction
+
+The current overlay starts from point A and point B. It samples depth along that line and bends the line visually. This is useful, but it can still look too tied to the original endpoints.
+
+The next planned overlay model is more like placing a string over terrain:
+
+```text
+clicked A/B line -> many control points -> depth snapping -> smoothing -> tracked overlay
+```
+
+What should change in a future script:
+
+- Use many control points along the line, not only A and B.
+- Track those control points across frames.
+- Let each control point search nearby depth values so the line can settle onto visible surface shape.
+- Smooth the control points so the result looks like one continuous string.
+- Keep `--track-points` and `--temporal-memory`, but apply them to the whole string instead of mainly the endpoints and bend profile.
+
+This still will not be true AR anchoring. For viewpoint-correct behavior, the later system needs camera pose estimation and a persistent 3D terrain map.
