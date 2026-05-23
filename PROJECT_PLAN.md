@@ -286,14 +286,16 @@ video -> frames -> depth maps -> terrain-aware overlay images -> optional demo v
 Implemented scripts:
 
 - `scripts/terrain_line.py`: samples depth along a user-defined line and converts it into a depth-aware polyline.
+- `scripts/line_selector.py`: lets the user click two points on a frame and save them as a reusable line preset.
 - `scripts/overlay_renderer.py`: renders a single-frame comparison with the original frame, depth map, flat line, and terrain-aware line.
-- `scripts/process_video.py`: applies the overlay renderer to multiple extracted frames and writes an MP4 demo.
+- `scripts/process_video.py`: applies the overlay renderer to multiple extracted frames, optionally tracks the selected line through the sequence, smooths the line bend with temporal memory, and writes an MP4 demo.
 
 Main commands from the `python/` folder:
 
 ```powershell
-.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --clear
-.\.venv\Scripts\python.exe -B scripts\process_video.py --clear
+.\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1
+.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --preset site_line_1 --clear
+.\.venv\Scripts\python.exe -B scripts\process_video.py --preset site_line_1 --track-points --temporal-memory 0.65 --clear
 ```
 
 Current outputs:
@@ -302,4 +304,36 @@ Current outputs:
 - Multi-frame overlay sequences are written to `python/overlays/sequence/`.
 - The demo video is written to `python/output_videos/terrain_overlay_demo.mp4`.
 
+Unity is not required for the current prototype. The present research milestone can be completed in Python using OpenCV outputs. Unity should be treated as a later implementation path for real-time AR, mobile visualization, or 3D terrain mesh experiments.
+
+The current persistence mode is a video-based approximation. It has two memory mechanisms: optical-flow endpoint tracking to carry the selected line across frames, and temporal bend smoothing to blend each frame's depth-based bend with previous frames. This should make the demo more stable, but it is still not a true world-anchored AR map.
+
 The next research task is to tune the selected line points and overlay parameters on a good terrain frame. After the visual behavior is acceptable, the next technical step is to replace the current 2D depth-warp approximation with a more physically meaningful 3D projection using camera intrinsics.
+
+## 13. Next Overlay Logic Upgrade: String-Like Surface Conformance
+
+The current overlay is still mostly a 2D line effect. The endpoints are selected in image space, and the interior of the line bends according to depth values. This is useful for a first demo, but it does not fully behave like a physical string laid across an object or uneven terrain.
+
+A better model is:
+
+```txt
+selected endpoints -> many rope/control points -> depth-aware surface snapping -> temporal tracking -> projected overlay
+```
+
+Recommended short-term upgrade:
+
+- Convert the line from only two endpoints into many control points.
+- Track the control points across frames using optical flow, not only point A and point B.
+- At each frame, resample the depth map around each control point.
+- Move each control point toward nearby depth ridges, slopes, or terrain changes.
+- Smooth the control points so the line behaves like a continuous string instead of a noisy curve.
+
+Recommended long-term upgrade:
+
+- Convert monocular depth frames into a 3D point cloud or mesh.
+- Estimate camera pose across frames.
+- Place the blueprint/string line in a persistent 3D coordinate system.
+- Compute a surface path over the terrain mesh, similar to a geodesic or constrained shortest path.
+- Reproject that 3D surface-following path into each video frame or AR camera view.
+
+The long-term version is the one that would show viewpoint changes correctly. It requires camera pose estimation and a persistent surface map. Possible tools include COLMAP, ORB-SLAM, ARCore, ARKit, or Unity AR Foundation later. For the current Python prototype, the best next step is dense control-point tracking plus depth-aware snapping.

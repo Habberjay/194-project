@@ -39,10 +39,14 @@ The prototype intentionally avoids real-time AR, mobile inference, Docker, cloud
 4. Put a video in `python/input_videos/`.
 5. Run `.\.venv\Scripts\python.exe scripts\extract_frames.py --clear`.
 6. Run `.\.venv\Scripts\python.exe scripts\run_depth.py --clear`.
-7. Run `.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --clear`.
-8. Optional: import a PNG from `python/depth_maps/` into Unity and assign it to `DepthMapTerrainGenerator`.
+7. Run `.\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1`.
+8. Run `.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --preset site_line_1 --clear`.
+9. Optional: run `.\.venv\Scripts\python.exe -B scripts\process_video.py --preset site_line_1 --track-points --clear`.
+10. Optional later step: import a PNG from `python/depth_maps/` into Unity and assign it to `DepthMapTerrainGenerator`.
 
 See [python/README.md](python/README.md) and [unity/README.md](unity/README.md) for the practical workflow.
+
+For a command-by-command usage guide, see [COMMAND_GUIDE.md](COMMAND_GUIDE.md).
 
 ## References
 

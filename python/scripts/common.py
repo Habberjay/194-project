@@ -14,6 +14,7 @@ DEPTH_MAPS_DIR = PYTHON_ROOT / "depth_maps"
 OVERLAYS_DIR = PYTHON_ROOT / "overlays"
 OUTPUT_VIDEOS_DIR = PYTHON_ROOT / "output_videos"
 CHECKPOINTS_DIR = PYTHON_ROOT / "checkpoints"
+LINE_PRESETS_PATH = PYTHON_ROOT / "line_presets.json"
 
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 SUPPORTED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}

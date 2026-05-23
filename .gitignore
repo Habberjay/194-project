@@ -6,6 +6,11 @@ python/frames/*
 python/depth_maps/*
 !python/depth_maps/.gitkeep
 python/depth_maps_normalized/
+python/overlays/*
+!python/overlays/.gitkeep
+python/output_videos/*
+!python/output_videos/.gitkeep
+python/line_presets.json
 python/checkpoints/*.pth
 python/checkpoints/*.tmp
 python/scripts/__pycache__/

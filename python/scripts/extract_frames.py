@@ -28,7 +28,8 @@ def find_default_video() -> Path:
 def extract_frames(
     video_path: Path,
     output_dir: Path,
-    frame_step: int,
+    frame_step: int | None,
+    sample_fps: float,
     max_frames: int,
     image_extension: str,
     clear: bool,
@@ -40,8 +41,11 @@ def extract_frames(
         supported = ", ".join(sorted(SUPPORTED_VIDEO_EXTENSIONS))
         raise ValueError(f"Unsupported video format: {video_path.suffix}. Supported: {supported}")
 
-    if frame_step < 1:
+    if frame_step is not None and frame_step < 1:
         raise ValueError("--frame-step must be 1 or greater.")
+
+    if sample_fps <= 0:
+        raise ValueError("--sample-fps must be greater than 0.")
 
     if max_frames < 0:
         raise ValueError("--max-frames must be 0 or greater.")
@@ -57,6 +61,19 @@ def extract_frames(
     total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     if total_frames == 0:
         print("Warning: OpenCV reports 0 frames. The script will still try to read the video.")
+
+    source_fps = float(capture.get(cv2.CAP_PROP_FPS))
+    if frame_step is None:
+        if source_fps > 0:
+            frame_step = max(1, int(round(source_fps / sample_fps)))
+        else:
+            frame_step = max(1, int(round(30.0 / sample_fps)))
+            print("Warning: OpenCV could not read the video FPS. Assuming 30 FPS for sampling.")
+
+    if source_fps > 0:
+        effective_sample_fps = source_fps / frame_step
+        print(f"Video FPS: {source_fps:.2f}. Saving about {effective_sample_fps:.2f} frame(s) per second.")
+    print(f"Frame step: {frame_step}")
 
     saved_count = 0
     frame_index = 0
@@ -99,7 +116,18 @@ def parse_args() -> argparse.Namespace:
         default=str(FRAMES_DIR),
         help="Folder for extracted frames. Relative paths are resolved from the python folder.",
     )
-    parser.add_argument("--frame-step", type=int, default=30, help="Save one frame every N frames.")
+    parser.add_argument(
+        "--sample-fps",
+        type=float,
+        default=5.0,
+        help="Target number of frames to save per second when --frame-step is not set.",
+    )
+    parser.add_argument(
+        "--frame-step",
+        type=int,
+        default=None,
+        help="Save one frame every N frames. Overrides --sample-fps when provided.",
+    )
     parser.add_argument("--max-frames", type=int, default=60, help="Maximum frames to save. Use 0 for no limit.")
     parser.add_argument("--image-extension", choices=["png", "jpg", "jpeg"], default="png")
     parser.add_argument("--clear", action="store_true", help="Clean the output folder before extraction.")
@@ -117,6 +145,7 @@ def main() -> int:
             video_path=video_path,
             output_dir=output_dir,
             frame_step=args.frame_step,
+            sample_fps=args.sample_fps,
             max_frames=args.max_frames,
             image_extension=args.image_extension,
             clear=args.clear,

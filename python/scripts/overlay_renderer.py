@@ -10,6 +10,7 @@ import numpy as np
 from common import (
     DEPTH_MAPS_DIR,
     FRAMES_DIR,
+    LINE_PRESETS_PATH,
     OVERLAYS_DIR,
     SUPPORTED_IMAGE_EXTENSIONS,
     clear_folder_contents,
@@ -17,6 +18,7 @@ from common import (
     ensure_project_folders,
     resolve_path,
 )
+from line_presets import load_line_preset
 from terrain_line import TerrainLineConfig, build_terrain_line, default_points, parse_point
 
 
@@ -138,6 +140,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--depth", default=None, help="Depth map image. Defaults to the matching *_depth.png in depth_maps/.")
     parser.add_argument("--depth-dir", default=str(DEPTH_MAPS_DIR), help="Folder used when finding a matching depth map.")
     parser.add_argument("--output-dir", default=str(OVERLAYS_DIR), help="Folder for overlay outputs.")
+    parser.add_argument("--preset", default=None, help="Line preset name from line_presets.json.")
+    parser.add_argument("--presets", default=str(LINE_PRESETS_PATH), help="Path to the line preset JSON file.")
     parser.add_argument("--point-a", default=None, help="Start point as x,y. Defaults to 20%% width, 72%% height.")
     parser.add_argument("--point-b", default=None, help="End point as x,y. Defaults to 80%% width, 72%% height.")
     parser.add_argument("--samples", type=int, default=96, help="Number of depth samples along the line.")
@@ -174,8 +178,16 @@ def main() -> int:
         height, width = depth_map.shape
 
         default_a, default_b = default_points(width, height)
-        start = parse_point(args.point_a) if args.point_a else default_a
-        end = parse_point(args.point_b) if args.point_b else default_b
+        start, end = default_a, default_b
+
+        if args.preset:
+            start, end = load_line_preset(resolve_path(args.presets), args.preset)
+
+        if args.point_a or args.point_b:
+            if not args.point_a or not args.point_b:
+                raise ValueError("Use both --point-a and --point-b, or use neither.")
+            start = parse_point(args.point_a)
+            end = parse_point(args.point_b)
 
         config = TerrainLineConfig(
             samples=args.samples,
