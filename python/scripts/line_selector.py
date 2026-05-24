@@ -110,7 +110,7 @@ def select_points(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Click two points on a frame and save them as a reusable line preset.")
-    parser.add_argument("--frame", default=None, help="Frame image. Defaults to the first image in frames/.")
+    parser.add_argument("--frame", default=None, help="Frame image. Defaults to the first image in output/frames/.")
     parser.add_argument("--preset", default="default", help="Preset name to save.")
     parser.add_argument("--output", default=str(LINE_PRESETS_PATH), help="JSON file for saved line presets.")
     parser.add_argument("--max-width", type=int, default=1200, help="Maximum display width.")

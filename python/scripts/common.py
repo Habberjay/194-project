@@ -8,11 +8,13 @@ import numpy as np
 
 
 PYTHON_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_ROOT = PYTHON_ROOT / "output"
 INPUT_VIDEOS_DIR = PYTHON_ROOT / "input_videos"
-FRAMES_DIR = PYTHON_ROOT / "frames"
-DEPTH_MAPS_DIR = PYTHON_ROOT / "depth_maps"
-OVERLAYS_DIR = PYTHON_ROOT / "overlays"
-OUTPUT_VIDEOS_DIR = PYTHON_ROOT / "output_videos"
+FRAMES_DIR = OUTPUT_ROOT / "frames"
+DEPTH_MAPS_DIR = OUTPUT_ROOT / "depth_maps"
+OVERLAYS_DIR = OUTPUT_ROOT / "overlays"
+OUTPUT_VIDEOS_DIR = OUTPUT_ROOT / "videos"
+OUTPUT_DATA_DIR = OUTPUT_ROOT / "data"
 CHECKPOINTS_DIR = PYTHON_ROOT / "checkpoints"
 LINE_PRESETS_PATH = PYTHON_ROOT / "line_presets.json"
 
@@ -21,7 +23,16 @@ SUPPORTED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 
 
 def ensure_project_folders() -> None:
-    for folder in (INPUT_VIDEOS_DIR, FRAMES_DIR, DEPTH_MAPS_DIR, OVERLAYS_DIR, OUTPUT_VIDEOS_DIR, CHECKPOINTS_DIR):
+    for folder in (
+        OUTPUT_ROOT,
+        INPUT_VIDEOS_DIR,
+        FRAMES_DIR,
+        DEPTH_MAPS_DIR,
+        OVERLAYS_DIR,
+        OUTPUT_VIDEOS_DIR,
+        OUTPUT_DATA_DIR,
+        CHECKPOINTS_DIR,
+    ):
         folder.mkdir(parents=True, exist_ok=True)
 
 

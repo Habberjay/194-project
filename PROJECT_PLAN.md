@@ -111,22 +111,25 @@ project-root/
     input_videos/
       example_site_video.mp4
 
-    frames/
-      video_frame_00000.png
-
-    depth_maps/
-      video_frame_00000_depth.png
-
-    overlays/
-      video_frame_00000_overlay.png
-      video_frame_00000_comparison.png
-      contact_sheet.png
-      sequence/
-        video_frame_00000_overlay.png
-
-    output_videos/
-      terrain_overlay_demo.mp4
-      terrain_overlay_demo_small.avi
+    output/
+      frames/
+        video_frame_00000.png
+      depth_maps/
+        video_frame_00000_depth.png
+      overlays/
+        string_single/
+          video_frame_00000_overlay.png
+        anchor_debug/
+          video_frame_00000_anchor_debug.png
+        sequence/
+          video_frame_00000_overlay.png
+        string_contact_sheet.png
+      videos/
+        terrain_overlay_demo.mp4
+        terrain_overlay_demo_small.avi
+        terrain_string_demo_small.avi
+      data/
+        string_points.json
 
     checkpoints/
       depth_anything_v2_vits.pth
@@ -140,10 +143,13 @@ project-root/
       normalize_depth.py
       line_presets.py
       line_selector.py
+      anchor_tracker.py
+      string_line.py
       terrain_line.py
       overlay_renderer.py
       process_video.py
       make_contact_sheet.py
+      run_offline_demo.py
 
   unity/
     README.md
@@ -164,9 +170,12 @@ Current important Python scripts:
 - `line_selector.py`: lets the user click point A and point B on a frame and save them as a line preset.
 - `line_presets.py`: reads and writes reusable line presets.
 - `terrain_line.py`: generates depth-aware polylines from frame points and depth maps.
+- `string_line.py`: generates a string-like overlay from many depth-snapped control points.
+- `anchor_tracker.py`: attaches the first-frame string to visual scene features across later frames.
 - `overlay_renderer.py`: draws flat-line and terrain-aware-line overlays for one frame.
-- `process_video.py`: renders overlays across multiple frames, with optional optical-flow tracking and temporal bend memory.
+- `process_video.py`: renders overlays across multiple frames, including feature anchoring, light/full depth re-snap, and legacy experimental temporal memory.
 - `make_contact_sheet.py`: creates a single PNG preview sheet from overlay frames.
+- `run_offline_demo.py`: runs the full feature-anchored offline goal with checks, retries, fallback video export, contact sheet creation, anchor debug output, and point-data export.
 
 ## 6. Prototype Algorithm
 
@@ -210,7 +219,7 @@ Expected output:
 - Sample the depth map along the point-to-point line.
 - Convert the straight line into a depth-influenced polyline.
 - Render both the original straight line and the terrain-conforming line for comparison.
-- Export result images to `python/overlays/`.
+- Export result images to `python/output/overlays/`.
 
 Expected output:
 
@@ -244,6 +253,7 @@ Core success criteria:
 Optional success criteria:
 
 - The same overlay concept is shown across multiple frames.
+- The multi-frame overlay is attached to the same scene area using visual feature anchoring instead of screen-static endpoints.
 - The output includes side-by-side original frame, depth map, and overlay visualization.
 - The line generation parameters can be adjusted from the command line.
 
@@ -276,87 +286,105 @@ Longer-term improvements may include:
 The current working pipeline is:
 
 ```txt
-video -> frames -> depth maps -> clicked line preset -> bending overlay -> persistent video demo
+video -> frames -> depth maps -> clicked line preset -> first-frame string -> feature anchor -> light depth re-snap -> demo video/contact sheet
 ```
 
-The next research step is to improve the overlay logic from a two-endpoint bending line into a string-like surface-conforming line. The current result is useful for showing the idea, but it is still visually constrained by point A and point B. It cannot yet fully behave like a physical string laid over an object or terrain surface from changing viewpoints.
+The current implementation has moved beyond the first two-endpoint bending line into a string-like surface-conforming line. The selected A/B line is now treated as first-frame placement only. After frame 0, the string is projected through the video using tracked visual features, then lightly adjusted with the current depth map. This approximates TikTok-style scene attachment in an offline OpenCV video pipeline, but it is still not true ARCore/ARKit world anchoring.
 
-Next implementation target:
+Current recommended command from the `python/` folder:
 
-1. Convert the selected A/B line into many control points.
-2. Track those control points across frames, not only the two endpoints.
-3. Use local depth neighborhoods to adjust each control point toward visible surface shape.
-4. Smooth the control points so the line behaves like a continuous string.
-5. Export debug images showing control points, depth samples, and final overlay.
+```powershell
+.\.venv\Scripts\python.exe -B scripts\run_offline_demo.py --preset site_line_1 --line-mode string --anchor-mode feature --depth-resnap light --sample-fps 5 --max-frames 60 --retries 2
+```
+
+Important current behavior:
+
+- `--anchor-mode feature` is the recommended final demo mode.
+- `--depth-resnap light` lets depth refine the anchored string without letting depth dominate it.
+- `--temporal-memory 0` is the recommended final behavior. Direct coordinate memory remains available for experiments, but it can make the line messy and should not be used for the final output unless specifically comparing methods.
+- Point A/B should not be interpreted as screen-static anchors after the first frame.
 
 ## 12. Current Prototype Status
 
-The Python prototype now includes the terrain overlay stage:
+The Python prototype now includes the feature-anchored terrain overlay stage:
 
 ```txt
-video -> frames -> depth maps -> line preset -> terrain-aware overlay images -> optional demo video/contact sheet
+video -> frames -> depth maps -> line preset -> feature-anchored terrain-aware overlay images -> demo video/contact sheet
 ```
 
 Implemented scripts:
 
 - `scripts/extract_frames.py`: extracts video frames. By default, it now samples about 5 frames per second unless `--frame-step` is manually provided.
 - `scripts/terrain_line.py`: samples depth along a user-defined line and converts it into a depth-aware polyline.
+- `scripts/string_line.py`: creates a string-like terrain overlay by depth-snapping many control points and smoothing them into one path.
+- `scripts/anchor_tracker.py`: detects and tracks visual features around the first-frame string, estimates an affine transform with RANSAC, can fall back to homography when enough stable matches exist, and reuses the last valid transform briefly when tracking is weak.
 - `scripts/line_selector.py`: lets the user click two points on a frame and save them as a reusable line preset.
 - `scripts/overlay_renderer.py`: renders a single-frame comparison with the original frame, depth map, flat line, and terrain-aware line.
-- `scripts/process_video.py`: applies the overlay renderer to multiple extracted frames, optionally tracks the selected line through the sequence, smooths the line bend with temporal memory, and writes an MP4 demo.
+- `scripts/process_video.py`: applies the overlay renderer to multiple extracted frames, supports feature anchoring, optional depth re-snap modes, legacy tracking experiments, point-data export, anchor debug output, and video export.
 - `scripts/make_contact_sheet.py`: creates a PNG preview sheet from the generated overlay frames.
+- `scripts/run_offline_demo.py`: runs the complete feature-anchored offline string demo and retries recoverable stage failures.
 
 Main commands from the `python/` folder:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\extract_frames.py --sample-fps 5 --max-frames 60 --clear
-.\.venv\Scripts\python.exe scripts\run_depth.py --clear
 .\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1
-.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --preset site_line_1 --clear
-.\.venv\Scripts\python.exe -B scripts\process_video.py --preset site_line_1 --track-points --temporal-memory 0.65 --clear
+.\.venv\Scripts\python.exe -B scripts\run_offline_demo.py --preset site_line_1 --line-mode string --anchor-mode feature --depth-resnap light --sample-fps 5 --max-frames 60 --retries 2
 ```
 
 Current outputs:
 
-- Single-frame overlay images are written to `python/overlays/`.
-- Multi-frame overlay sequences are written to `python/overlays/sequence/`.
-- The demo video is written to `python/output_videos/terrain_overlay_demo.mp4`.
-- A more compatible fallback video can be written to `python/output_videos/terrain_overlay_demo_small.avi` using `--fourcc MJPG --video-scale 0.5`.
-- A normal image preview can be written to `python/overlays/contact_sheet.png`.
+- Single-frame overlay images are written to `python/output/overlays/`.
+- Full-runner single-frame string checks are written to `python/output/overlays/string_single/`.
+- Multi-frame overlay sequences are written to `python/output/overlays/sequence/`.
+- String overlay sequences are written to `python/output/overlays/string_sequence/`.
+- String debug frames are written to `python/output/overlays/string_debug/`.
+- Feature-anchor debug frames are written to `python/output/overlays/anchor_debug/`.
+- The demo video is written to `python/output/videos/terrain_overlay_demo.mp4`.
+- A more compatible fallback video can be written to `python/output/videos/terrain_overlay_demo_small.avi` using `--fourcc MJPG --video-scale 0.5`.
+- The final string demo video is written to `python/output/videos/terrain_string_demo_small.avi`.
+- A normal image preview can be written to `python/output/overlays/contact_sheet.png` or `python/output/overlays/string_contact_sheet.png`.
+- String point data is written to `python/output/data/string_points.json`.
 
 Unity is not required for the current prototype. The present research milestone can be completed in Python using OpenCV outputs. Unity should be treated as a later implementation path for real-time AR, mobile visualization, or 3D terrain mesh experiments.
 
-The current persistence mode is a video-based approximation. It has two memory mechanisms: optical-flow endpoint tracking to carry the selected line across frames, and temporal bend smoothing to blend each frame's depth-based bend with previous frames. This should make the demo more stable, but it is still not a true world-anchored AR map.
+The current persistence mode is a video-based approximation. The recommended path uses OpenCV feature anchoring: the first frame becomes the anchor frame, features near the selected string are tracked through the video, and the original string is transformed into each later frame. This should feel closer to TikTok-style AR attachment than fixed screen points. It is still not a true world-anchored AR map because it does not estimate a persistent metric 3D coordinate system.
 
-The next research task is to tune the selected line points and overlay parameters on a good terrain frame. After the visual behavior is acceptable, the next technical step is to replace the current 2D depth-warp approximation with a more physically meaningful 3D projection using camera intrinsics.
+The next research task is to tune the selected line points, anchor ROI, and depth re-snap mode on a good terrain frame. After the visual behavior is acceptable, the next technical step is to replace the current 2.5D depth-snap approximation with a more physically meaningful 3D projection using camera intrinsics and camera pose.
 
 ## 13. Next Overlay Logic Upgrade: String-Like Surface Conformance
 
 The current overlay is still mostly a 2D line effect. The endpoints are selected in image space, and the interior of the line bends according to depth values. This is useful for a first demo, but it does not fully behave like a physical string laid across an object or uneven terrain.
 
-A better model is:
+A better model is now implemented for the offline prototype:
 
 ```txt
-selected endpoints -> many rope/control points -> depth-aware surface snapping -> temporal tracking -> projected overlay
+selected endpoints -> first-frame string/control points -> feature anchor projection -> light depth re-snap -> projected overlay
 ```
 
-Recommended short-term upgrade:
+Implemented short-term upgrade:
 
 - Convert the line from only two endpoints into many control points.
-- Track the control points across frames using optical flow, not only point A and point B.
-- At each frame, resample the depth map around each control point.
+- Track the surrounding terrain/object region using visual features, not only point A and point B.
+- Estimate a per-frame transform with RANSAC and apply it to the first-frame string.
+- At each frame, optionally resample the depth map around each projected control point.
 - Move each control point toward nearby depth ridges, slopes, or terrain changes.
 - Smooth the control points so the line behaves like a continuous string instead of a noisy curve.
-- Add a debug output that shows raw control points, depth-adjusted control points, and the final smoothed string.
-- Keep the clicked A/B line as the user input, but treat it as an initial guide rather than a rigid final constraint.
+- Add debug output that shows tracked feature points, inliers, projected string points, and depth-adjusted string points.
+- Keep the clicked A/B line as the user input, but treat it as initial placement rather than a rigid screen constraint.
 
-Possible short-term algorithm:
+Current short-term algorithm:
 
 1. Generate `N` control points along the clicked line.
-2. For each control point, search a small vertical or normal-direction window in the depth map.
-3. Prefer positions that are locally consistent with neighboring control points and have strong depth/surface support.
-4. Apply a simple string constraint so adjacent points do not move too far apart.
-5. Blend the new control-point positions with the previous frame's positions for temporal stability.
+2. Build an anchor ROI around the first-frame string.
+3. Detect trackable visual features in the ROI.
+4. Track features frame-to-frame with optical flow.
+5. Estimate an affine transform with RANSAC, with homography as a conservative fallback when enough stable matches exist.
+6. Project the original string into the current frame using that transform.
+7. Apply `--depth-resnap light`, `none`, or `full`.
+8. Export overlay images, anchor debug frames, a readable AVI, a contact sheet, and point-data JSON.
+
+The implementation remains a 2.5D image-space method. It is more string-like than the first bending-line prototype, but it is still not a true physical simulation or world-anchored AR path.
 
 Recommended long-term upgrade:
 

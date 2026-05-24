@@ -19,12 +19,15 @@ from common import (
     resolve_path,
 )
 from line_presets import load_line_preset
+from string_line import StringLineConfig, StringLineResult, build_string_line, string_points_to_json
 from terrain_line import TerrainLineConfig, build_terrain_line, default_points, parse_point
 
 
 FLAT_COLOR = (0, 210, 255)
 TERRAIN_COLOR = (70, 255, 80)
 ANCHOR_COLOR = (255, 255, 255)
+RAW_STRING_COLOR = (0, 140, 255)
+BASELINE_COLOR = (255, 190, 80)
 
 
 def find_default_frame() -> Path:
@@ -92,6 +95,51 @@ def draw_lines(
     return output
 
 
+def resolve_profile_mode(line_mode: str, profile_mode: str) -> str:
+    if profile_mode == "auto":
+        return "absolute" if line_mode == "string" else "residual"
+    return profile_mode
+
+
+def resolve_axis(line_mode: str, axis: str) -> str:
+    if axis == "auto":
+        return "normal" if line_mode == "string" else "vertical"
+    return axis
+
+
+def draw_string_debug(
+    frame: np.ndarray,
+    depth_map: np.ndarray,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    result: StringLineResult,
+    thickness: int,
+) -> np.ndarray:
+    depth_view = cv2.applyColorMap(depth_map, cv2.COLORMAP_TURBO)
+    debug = cv2.addWeighted(frame, 0.55, depth_view, 0.45, 0)
+
+    cv2.polylines(debug, [to_polyline(result.baseline_points)], False, BASELINE_COLOR, max(1, thickness - 2), cv2.LINE_AA)
+    cv2.polylines(debug, [to_polyline(result.raw_points)], False, RAW_STRING_COLOR, max(1, thickness - 1), cv2.LINE_AA)
+    cv2.polylines(debug, [to_polyline(result.string_points)], False, TERRAIN_COLOR, thickness, cv2.LINE_AA)
+
+    stride = max(1, result.string_points.shape[0] // 24)
+    for point in result.raw_points[::stride]:
+        center = (int(round(point[0])), int(round(point[1])))
+        cv2.circle(debug, center, 3, RAW_STRING_COLOR, -1, cv2.LINE_AA)
+    for point in result.string_points[::stride]:
+        center = (int(round(point[0])), int(round(point[1])))
+        cv2.circle(debug, center, 3, TERRAIN_COLOR, -1, cv2.LINE_AA)
+
+    start_i = (int(round(start[0])), int(round(start[1])))
+    end_i = (int(round(end[0])), int(round(end[1])))
+    for point in (start_i, end_i):
+        cv2.circle(debug, point, 7, (0, 0, 0), -1, cv2.LINE_AA)
+        cv2.circle(debug, point, 5, ANCHOR_COLOR, -1, cv2.LINE_AA)
+
+    draw_label(debug, "String debug: baseline, raw snapped points, final smoothed string")
+    return debug
+
+
 def render_result(
     frame: np.ndarray,
     depth_map: np.ndarray,
@@ -116,6 +164,57 @@ def render_result(
     return overlay_view, comparison
 
 
+def render_result_with_mode(
+    frame: np.ndarray,
+    depth_map: np.ndarray,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    line_mode: str,
+    terrain_config: TerrainLineConfig,
+    string_config: StringLineConfig,
+    thickness: int,
+    debug_string: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, dict[str, object]]:
+    if line_mode == "simple":
+        result = build_terrain_line(depth_map, start, end, terrain_config)
+        terrain_points = result.terrain_points
+        debug_view = None
+        points_data = {
+            "mode": "simple",
+            "points": string_points_to_json(terrain_points),
+        }
+        line_label = "Depth map + terrain-aware line"
+        comparison_label = "Comparison: flat line vs terrain-aware line"
+    elif line_mode == "string":
+        result = build_string_line(depth_map, start, end, string_config)
+        terrain_points = result.string_points
+        debug_view = draw_string_debug(frame, depth_map, start, end, result, thickness) if debug_string else None
+        points_data = {
+            "mode": "string",
+            "baseline_points": string_points_to_json(result.baseline_points),
+            "raw_points": string_points_to_json(result.raw_points),
+            "string_points": string_points_to_json(result.string_points),
+            "chosen_offsets": [round(float(value), 3) for value in result.chosen_offsets],
+        }
+        line_label = "Depth map + terrain-aware string"
+        comparison_label = "Comparison: flat line vs terrain-aware string"
+    else:
+        raise ValueError(f"Unsupported line mode: {line_mode}")
+
+    flat_view = draw_lines(frame, start, end, terrain_points, include_flat=True, include_terrain=False, thickness=thickness)
+    draw_label(flat_view, "Original frame + flat line")
+
+    depth_view = cv2.applyColorMap(depth_map, cv2.COLORMAP_TURBO)
+    depth_view = draw_lines(depth_view, start, end, terrain_points, include_flat=False, include_terrain=True, thickness=thickness)
+    draw_label(depth_view, line_label)
+
+    overlay_view = draw_lines(frame, start, end, terrain_points, include_flat=True, include_terrain=True, thickness=thickness)
+    draw_label(overlay_view, comparison_label)
+
+    comparison = np.hstack([flat_view, depth_view, overlay_view])
+    return overlay_view, comparison, debug_view, points_data
+
+
 def write_overlay_outputs(
     frame_path: Path,
     output_dir: Path,
@@ -134,28 +233,49 @@ def write_overlay_outputs(
     return overlay_path, comparison_path
 
 
+def write_debug_output(frame_path: Path, output_dir: Path, debug_image: np.ndarray | None) -> Path | None:
+    if debug_image is None:
+        return None
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    debug_path = output_dir / f"{frame_path.stem}_string_debug.png"
+    if not cv2.imwrite(str(debug_path), debug_image):
+        raise RuntimeError(f"Could not write debug image: {debug_path}")
+    return debug_path
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render a terrain-aware blueprint line over a frame and depth map.")
-    parser.add_argument("--frame", default=None, help="Frame image. Defaults to the first image in frames/.")
-    parser.add_argument("--depth", default=None, help="Depth map image. Defaults to the matching *_depth.png in depth_maps/.")
+    parser.add_argument("--frame", default=None, help="Frame image. Defaults to the first image in output/frames/.")
+    parser.add_argument("--depth", default=None, help="Depth map image. Defaults to the matching *_depth.png in output/depth_maps/.")
     parser.add_argument("--depth-dir", default=str(DEPTH_MAPS_DIR), help="Folder used when finding a matching depth map.")
     parser.add_argument("--output-dir", default=str(OVERLAYS_DIR), help="Folder for overlay outputs.")
     parser.add_argument("--preset", default=None, help="Line preset name from line_presets.json.")
     parser.add_argument("--presets", default=str(LINE_PRESETS_PATH), help="Path to the line preset JSON file.")
     parser.add_argument("--point-a", default=None, help="Start point as x,y. Defaults to 20%% width, 72%% height.")
     parser.add_argument("--point-b", default=None, help="End point as x,y. Defaults to 80%% width, 72%% height.")
+    parser.add_argument("--line-mode", choices=["simple", "string"], default="simple", help="Overlay algorithm to use.")
     parser.add_argument("--samples", type=int, default=96, help="Number of depth samples along the line.")
+    parser.add_argument("--control-points", type=int, default=96, help="Number of string control points.")
+    parser.add_argument("--search-radius", type=int, default=32, help="String snap search radius in pixels.")
+    parser.add_argument("--candidate-step", type=int, default=2, help="Pixel step between string snap candidates.")
     parser.add_argument("--strength", type=float, default=60.0, help="Maximum visual displacement in pixels.")
     parser.add_argument("--smooth-window", type=int, default=9, help="Moving-average window for depth samples.")
-    parser.add_argument("--axis", choices=["vertical", "normal"], default="vertical", help="Direction used for visual displacement.")
+    parser.add_argument("--axis", choices=["auto", "vertical", "normal"], default="auto", help="Direction used for visual displacement.")
     parser.add_argument(
         "--profile-mode",
-        choices=["residual", "absolute"],
-        default="residual",
-        help="residual preserves endpoints; absolute bends around the median depth.",
+        choices=["auto", "residual", "absolute"],
+        default="auto",
+        help="auto uses residual for simple mode and absolute for string mode.",
     )
     parser.add_argument("--invert-depth", action="store_true", help="Invert grayscale depth before sampling.")
     parser.add_argument("--offset-sign", type=float, default=1.0, help="Use -1 if the line bends in the wrong direction.")
+    parser.add_argument("--snap-weight", type=float, default=1.0, help="String preference for depth-derived snap target.")
+    parser.add_argument("--edge-weight", type=float, default=0.35, help="String preference for depth edges/ridges.")
+    parser.add_argument("--smoothness", type=float, default=0.65, help="String penalty for abrupt neighbor motion.")
+    parser.add_argument("--post-smooth", type=float, default=0.35, help="Final string smoothing amount.")
+    parser.add_argument("--debug-string", action="store_true", help="Write a debug PNG showing string construction.")
+    parser.add_argument("--debug-dir", default=str(OVERLAYS_DIR / "string_debug"), help="Folder for string debug images.")
     parser.add_argument("--thickness", type=int, default=4, help="Overlay line thickness.")
     parser.add_argument("--clear", action="store_true", help="Clean the output folder before writing.")
     return parser.parse_args()
@@ -189,18 +309,47 @@ def main() -> int:
             start = parse_point(args.point_a)
             end = parse_point(args.point_b)
 
-        config = TerrainLineConfig(
+        profile_mode = resolve_profile_mode(args.line_mode, args.profile_mode)
+        axis = resolve_axis(args.line_mode, args.axis)
+        terrain_config = TerrainLineConfig(
             samples=args.samples,
             strength=args.strength,
             smooth_window=args.smooth_window,
-            axis=args.axis,
-            profile_mode=args.profile_mode,
+            axis=axis,
+            profile_mode=profile_mode,
             invert_depth=args.invert_depth,
             offset_sign=args.offset_sign,
         )
 
-        overlay, comparison = render_result(frame, depth_map, start, end, config, thickness=args.thickness)
+        string_config = StringLineConfig(
+            control_points=args.control_points,
+            search_radius=args.search_radius,
+            candidate_step=args.candidate_step,
+            strength=args.strength,
+            smooth_window=args.smooth_window,
+            axis=axis,
+            profile_mode=profile_mode,
+            invert_depth=args.invert_depth,
+            offset_sign=args.offset_sign,
+            snap_weight=args.snap_weight,
+            edge_weight=args.edge_weight,
+            smoothness=args.smoothness,
+            post_smooth=args.post_smooth,
+        )
+
+        overlay, comparison, debug_image, _points_data = render_result_with_mode(
+            frame,
+            depth_map,
+            start,
+            end,
+            line_mode=args.line_mode,
+            terrain_config=terrain_config,
+            string_config=string_config,
+            thickness=args.thickness,
+            debug_string=args.debug_string,
+        )
         overlay_path, comparison_path = write_overlay_outputs(frame_path, output_dir, overlay, comparison)
+        debug_path = write_debug_output(frame_path, resolve_path(args.debug_dir), debug_image)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -209,8 +358,11 @@ def main() -> int:
     print(f"Depth: {depth_path.name}")
     print(f"Point A: {start[0]:.1f},{start[1]:.1f}")
     print(f"Point B: {end[0]:.1f},{end[1]:.1f}")
+    print(f"Line mode: {args.line_mode}")
     print(f"Saved overlay: {overlay_path}")
     print(f"Saved comparison: {comparison_path}")
+    if debug_path:
+        print(f"Saved debug: {debug_path}")
     return 0
 
 

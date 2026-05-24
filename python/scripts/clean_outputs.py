@@ -6,8 +6,11 @@ import sys
 from common import (
     DEPTH_MAPS_DIR,
     FRAMES_DIR,
+    OUTPUT_DATA_DIR,
+    OUTPUT_ROOT,
     OUTPUT_VIDEOS_DIR,
     OVERLAYS_DIR,
+    PYTHON_ROOT,
     clear_folder_contents,
     ensure_project_folders,
     resolve_path,
@@ -17,9 +20,19 @@ from common import (
 DEFAULT_OUTPUT_FOLDERS = [
     FRAMES_DIR,
     DEPTH_MAPS_DIR,
-    DEPTH_MAPS_DIR.parent / "depth_maps_normalized",
+    OUTPUT_ROOT / "depth_maps_normalized",
     OVERLAYS_DIR,
     OUTPUT_VIDEOS_DIR,
+    OUTPUT_DATA_DIR,
+]
+
+LEGACY_OUTPUT_FOLDERS = [
+    PYTHON_ROOT / "frames",
+    PYTHON_ROOT / "depth_maps",
+    PYTHON_ROOT / "depth_maps_normalized",
+    PYTHON_ROOT / "overlays",
+    PYTHON_ROOT / "output_videos",
+    PYTHON_ROOT / "output_data",
 ]
 
 
@@ -31,6 +44,7 @@ def parse_args() -> argparse.Namespace:
         default=[str(path) for path in DEFAULT_OUTPUT_FOLDERS],
         help="Folders to clean. Relative paths are resolved from the python folder.",
     )
+    parser.add_argument("--legacy", action="store_true", help="Also clean old pre-output/ generated folders.")
     parser.add_argument("--yes", action="store_true", help="Skip confirmation.")
     return parser.parse_args()
 
@@ -39,6 +53,8 @@ def main() -> int:
     args = parse_args()
     ensure_project_folders()
     folders = [resolve_path(folder) for folder in args.folders]
+    if args.legacy:
+        folders.extend(path.resolve() for path in LEGACY_OUTPUT_FOLDERS if path.exists())
 
     if not args.yes:
         print("This will delete generated files from:")

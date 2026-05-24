@@ -16,10 +16,12 @@ The prototype intentionally avoids real-time AR, mobile inference, Docker, cloud
 +-- COMMAND_GUIDE.md
 +-- python/
 |   +-- input_videos/
-|   +-- frames/
-|   +-- depth_maps/
-|   +-- overlays/
-|   +-- output_videos/
+|   +-- output/
+|   |   +-- frames/
+|   |   +-- depth_maps/
+|   |   +-- overlays/
+|   |   +-- videos/
+|   |   +-- data/
 |   +-- scripts/
 |   +-- checkpoints/
 |   +-- line_presets.json
@@ -40,12 +42,9 @@ The prototype intentionally avoids real-time AR, mobile inference, Docker, cloud
 3. Run `.\.venv\Scripts\python.exe scripts\download_checkpoint.py`.
 4. Put a video in `python/input_videos/`.
 5. Run `.\.venv\Scripts\python.exe scripts\extract_frames.py --sample-fps 5 --clear`.
-6. Run `.\.venv\Scripts\python.exe scripts\run_depth.py --clear`.
-7. Run `.\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1`.
-8. Run `.\.venv\Scripts\python.exe -B scripts\overlay_renderer.py --preset site_line_1 --clear`.
-9. Optional: run `.\.venv\Scripts\python.exe -B scripts\process_video.py --preset site_line_1 --track-points --temporal-memory 0.65 --clear`.
-10. Optional: run `.\.venv\Scripts\python.exe -B scripts\make_contact_sheet.py` for a PNG preview.
-11. Optional later step: import a PNG from `python/depth_maps/` into Unity and assign it to `DepthMapTerrainGenerator`.
+6. Run `.\.venv\Scripts\python.exe -B scripts\line_selector.py --preset site_line_1`.
+7. Run `.\.venv\Scripts\python.exe -B scripts\run_offline_demo.py --preset site_line_1 --line-mode string --anchor-mode feature --depth-resnap light --sample-fps 5 --max-frames 60 --retries 2`.
+8. Optional later step: import a PNG from `python/output/depth_maps/` into Unity and assign it to `DepthMapTerrainGenerator`.
 
 See [python/README.md](python/README.md) and [unity/README.md](unity/README.md) for the practical workflow.
 
@@ -53,7 +52,9 @@ For a command-by-command usage guide, see [COMMAND_GUIDE.md](COMMAND_GUIDE.md).
 
 ## Current Focus
 
-The current focus is the Python video prototype, not Unity. The next research upgrade is to move from a two-endpoint bending line toward a string-like line made of many control points that can track and conform to depth changes across frames.
+The current focus is the Python video prototype, not Unity. The main goal runner now builds a string-like line from many control points, anchors it to the scene using OpenCV feature tracking, lightly re-snaps it to depth, checks each pipeline stage, retries recoverable failures, and exports presentation outputs. Point A/B is only the first-frame placement; later frames are carried by visual scene features instead of fixed screen coordinates.
+
+Generated files now live under `python/output/` so the source folder stays cleaner.
 
 ## References
 

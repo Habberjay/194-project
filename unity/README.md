@@ -41,7 +41,7 @@ Assets/
     +-- DepthMaps/
 ```
 
-Import one grayscale depth PNG from `python/depth_maps/` into:
+Import one grayscale depth PNG from `python/output/depth_maps/` into:
 
 ```text
 Assets/Textures/DepthMaps/
