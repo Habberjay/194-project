@@ -145,6 +145,44 @@ public class DepthMapTerrainGenerator : MonoBehaviour
         }
     }
 
+    public bool TryGetLocalSurfacePointFromImageNormalized(
+        Vector2 imageNormalizedPoint,
+        bool flipImageY,
+        float surfaceOffset,
+        out Vector3 localPoint
+    )
+    {
+        localPoint = Vector3.zero;
+
+        if (depthMap == null)
+        {
+            return false;
+        }
+
+        Texture2D readableMap = readableDepthMap != null ? readableDepthMap : CreateReadableCopy(depthMap);
+        if (readableMap == null)
+        {
+            return false;
+        }
+
+        float u = Mathf.Clamp01(imageNormalizedPoint.x);
+        float imageY = Mathf.Clamp01(imageNormalizedPoint.y);
+        float v = flipImageY ? 1f - imageY : imageY;
+        float depthValue = readableMap.GetPixelBilinear(u, v).grayscale;
+
+        if (invertDepth)
+        {
+            depthValue = 1f - depthValue;
+        }
+
+        float worldX = (u - 0.5f) * terrainSize;
+        float worldZ = (v - 0.5f) * terrainSize;
+        float worldY = depthValue * terrainHeightScale + Mathf.Max(0f, surfaceOffset);
+
+        localPoint = new Vector3(worldX, worldY, worldZ);
+        return true;
+    }
+
     private void CacheComponents()
     {
         if (meshFilter == null)

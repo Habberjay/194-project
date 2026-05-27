@@ -12,9 +12,7 @@ OUTPUT_ROOT = PYTHON_ROOT / "output"
 INPUT_VIDEOS_DIR = PYTHON_ROOT / "input_videos"
 FRAMES_DIR = OUTPUT_ROOT / "frames"
 DEPTH_MAPS_DIR = OUTPUT_ROOT / "depth_maps"
-OVERLAYS_DIR = OUTPUT_ROOT / "overlays"
-OUTPUT_VIDEOS_DIR = OUTPUT_ROOT / "videos"
-OUTPUT_DATA_DIR = OUTPUT_ROOT / "data"
+UNITY_EXPORT_DIR = OUTPUT_ROOT / "unity_export"
 CHECKPOINTS_DIR = PYTHON_ROOT / "checkpoints"
 LINE_PRESETS_PATH = PYTHON_ROOT / "line_presets.json"
 
@@ -28,9 +26,7 @@ def ensure_project_folders() -> None:
         INPUT_VIDEOS_DIR,
         FRAMES_DIR,
         DEPTH_MAPS_DIR,
-        OVERLAYS_DIR,
-        OUTPUT_VIDEOS_DIR,
-        OUTPUT_DATA_DIR,
+        UNITY_EXPORT_DIR,
         CHECKPOINTS_DIR,
     ):
         folder.mkdir(parents=True, exist_ok=True)
@@ -92,7 +88,8 @@ def normalize_to_uint8(values: np.ndarray) -> np.ndarray:
 def clear_folder_contents(folder: Path, keep_names: set[str] | None = None) -> None:
     folder = folder.resolve()
     root = PYTHON_ROOT.resolve()
-    keep_names = keep_names or {".gitkeep"}
+    if keep_names is None:
+        keep_names = {".gitkeep"}
 
     if folder == root or root not in folder.parents:
         raise ValueError(f"Refusing to clean outside the Python project folder: {folder}")

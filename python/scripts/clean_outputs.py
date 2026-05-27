@@ -6,11 +6,9 @@ import sys
 from common import (
     DEPTH_MAPS_DIR,
     FRAMES_DIR,
-    OUTPUT_DATA_DIR,
     OUTPUT_ROOT,
-    OUTPUT_VIDEOS_DIR,
-    OVERLAYS_DIR,
     PYTHON_ROOT,
+    UNITY_EXPORT_DIR,
     clear_folder_contents,
     ensure_project_folders,
     resolve_path,
@@ -20,13 +18,15 @@ from common import (
 DEFAULT_OUTPUT_FOLDERS = [
     FRAMES_DIR,
     DEPTH_MAPS_DIR,
-    OUTPUT_ROOT / "depth_maps_normalized",
-    OVERLAYS_DIR,
-    OUTPUT_VIDEOS_DIR,
-    OUTPUT_DATA_DIR,
+    UNITY_EXPORT_DIR,
 ]
 
 LEGACY_OUTPUT_FOLDERS = [
+    OUTPUT_ROOT / "data",
+    OUTPUT_ROOT / "depth_maps_normalized",
+    OUTPUT_ROOT / "overlays",
+    OUTPUT_ROOT / "unity_demo",
+    OUTPUT_ROOT / "videos",
     PYTHON_ROOT / "frames",
     PYTHON_ROOT / "depth_maps",
     PYTHON_ROOT / "depth_maps_normalized",
@@ -53,13 +53,16 @@ def main() -> int:
     args = parse_args()
     ensure_project_folders()
     folders = [resolve_path(folder) for folder in args.folders]
+    legacy_folders = []
     if args.legacy:
-        folders.extend(path.resolve() for path in LEGACY_OUTPUT_FOLDERS if path.exists())
+        legacy_folders = [path.resolve() for path in LEGACY_OUTPUT_FOLDERS if path.exists()]
 
     if not args.yes:
         print("This will delete generated files from:")
         for folder in folders:
             print(f"  {folder}")
+        for folder in legacy_folders:
+            print(f"  {folder} (legacy folder will be removed)")
         answer = input("Continue? Type yes: ").strip().lower()
         if answer != "yes":
             print("Cancelled.")
@@ -69,6 +72,10 @@ def main() -> int:
         for folder in folders:
             clear_folder_contents(folder)
             print(f"Cleaned: {folder}")
+        for folder in legacy_folders:
+            clear_folder_contents(folder, keep_names=set())
+            folder.rmdir()
+            print(f"Removed legacy folder: {folder}")
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

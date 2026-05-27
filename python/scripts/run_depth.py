@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import cv2
-import torch
 
 from common import (
     CHECKPOINTS_DIR,
@@ -25,15 +24,22 @@ MODEL_CONFIGS = {
 }
 
 
-def choose_device() -> str:
-    if torch.cuda.is_available():
+def load_torch():
+    print("Loading PyTorch. The first Windows load can take 10-30 seconds...", flush=True)
+    import torch
+
+    return torch
+
+
+def choose_device(torch_module) -> str:
+    if torch_module.cuda.is_available():
         return "cuda"
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+    if hasattr(torch_module.backends, "mps") and torch_module.backends.mps.is_available():
         return "mps"
     return "cpu"
 
 
-def load_depth_model(checkpoint_path: Path, device: str):
+def load_depth_model(checkpoint_path: Path, device: str, torch_module):
     try:
         from depth_anything_v2.dpt import DepthAnythingV2
     except ImportError as exc:
@@ -48,9 +54,9 @@ def load_depth_model(checkpoint_path: Path, device: str):
     model = DepthAnythingV2(**MODEL_CONFIGS["vits"])
 
     try:
-        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+        state_dict = torch_module.load(checkpoint_path, map_location="cpu", weights_only=True)
     except TypeError:
-        state_dict = torch.load(checkpoint_path, map_location="cpu")
+        state_dict = torch_module.load(checkpoint_path, map_location="cpu")
 
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
@@ -80,11 +86,12 @@ def run_depth(
     if clear:
         clear_folder_contents(output_dir)
 
-    device = choose_device()
+    torch = load_torch()
+    device = choose_device(torch)
     print(f"Using device: {device}")
     print("Using Depth Anything V2 encoder: vits")
 
-    model = load_depth_model(checkpoint_path, device)
+    model = load_depth_model(checkpoint_path, device, torch)
     saved_count = 0
 
     with torch.inference_mode():
@@ -151,6 +158,9 @@ def main() -> int:
             invert=args.invert,
             clear=args.clear,
         )
+    except KeyboardInterrupt:
+        print("Interrupted while generating depth maps.", file=sys.stderr)
+        return 130
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
